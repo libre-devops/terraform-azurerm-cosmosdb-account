@@ -1,10 +1,4 @@
 <!--
-  This is the template for every Libre DevOps Terraform module. When you create a module from it:
-    - replace the title, tagline, and the CI workflow / repo name in the badge URLs
-    - replace the resources in main.tf, and the variables, outputs, and examples to match
-    - run `just docs` (or Sort-LdoTerraform.ps1) to regenerate the section between the markers
--->
-<!--
   Keep the title and badges OUTSIDE the centered <div>: the Terraform Registry's markdown renderer
   does not parse markdown inside an HTML block, so a # heading or [![badge]] in the div renders as
   literal text on the registry. Only the logo (HTML) goes in the div.
@@ -18,33 +12,71 @@
   </a>
 </div>
 
-# Terraform Module Template
+# Terraform Azure Cosmos DB Account
 
-A starting point for Libre DevOps Terraform modules: the standard file layout, examples, tests, and tooling.
+Cosmos DB accounts (API for Table or NoSQL, full surface) with Entra ID only data access, their data plane roles, and continuous backup.
 
-[![CI](https://github.com/libre-devops/terraform-module-template/actions/workflows/ci.yml/badge.svg)](https://github.com/libre-devops/terraform-module-template/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/libre-devops/terraform-module-template?sort=semver&label=release)](https://github.com/libre-devops/terraform-module-template/releases/latest)
+[![CI](https://github.com/libre-devops/terraform-azurerm-cosmosdb-account/actions/workflows/ci.yml/badge.svg)](https://github.com/libre-devops/terraform-azurerm-cosmosdb-account/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/libre-devops/terraform-azurerm-cosmosdb-account?sort=semver&label=release)](https://github.com/libre-devops/terraform-azurerm-cosmosdb-account/releases/latest)
 [![Terraform Registry](https://img.shields.io/badge/registry-libre--devops-7B42BC?logo=terraform&logoColor=white)](https://registry.terraform.io/namespaces/libre-devops)
-[![License](https://img.shields.io/github/license/libre-devops/terraform-module-template)](./LICENSE)
+[![License](https://img.shields.io/github/license/libre-devops/terraform-azurerm-cosmosdb-account)](./LICENSE)
 
 ---
+
+## Overview
+
+Cosmos DB accounts keyed by name, covering the full `azurerm_cosmosdb_account` surface (API and
+capacity by `kind` and `capabilities`, consistency, regions, backup, network rules, identity and
+customer managed keys, analytical store, CORS, and point in time restore into a new account).
+Secure by default: **key based (local) authentication off**, so Entra ID is the only way to the
+data and every access names its principal; account key metadata writes off; **TLS 1.2**; **public
+network access off**; **continuous backup on the 7 day tier**, which has no backup storage charge;
+free tier off. The resource group is passed by id.
+
+The accounts' **data plane roles** live here too, because they are child resources of the account
+that `azurerm_role_assignment` cannot make: `table_role_definitions` and `table_role_assignments`
+for API for Table accounts (through azapi, as azurerm has no resource for them), and
+`sql_role_definitions` and `sql_role_assignments` for NoSQL accounts. Assign the built-in **Cosmos
+DB Built-in Data Reader** or **Contributor** by name, or the account's own custom roles by key, at
+the account or a path below it.
+
+Everything else composes from other modules: tables through the `cosmosdb-table` module, private
+endpoints through `private-endpoint`, logs through `diagnostic-settings`, and ordinary Azure RBAC
+(for example Cosmos DB Operator) through `role-assignment`, as the complete example shows.
+
+> A Table account's endpoint is `https://<name>.table.cosmos.azure.com:443/` (output
+> `table_endpoints`). `azure-data-tables` and the other Azure Tables SDKs use Entra ID against it
+> unchanged: they ask for a `https://cosmos.azure.com/.default` token for that host by themselves.
 
 ## Usage
 
 ```hcl
-module "this" {
-  source = "libre-devops/<module>/azurerm"
+module "cosmosdb" {
+  source  = "libre-devops/cosmosdb-account/azurerm"
+  version = "~> 1.0"
 
-  name     = "rg-ldo-uks-dev-01"
-  location = "uksouth"
-  tags     = { environment = "dev" }
+  resource_group_id = module.rg.ids["rg-ldo-uks-dev-001"]
+  location          = "uksouth"
+
+  cosmosdb_accounts = {
+    "cosmos-ldo-uks-dev-001" = {
+      capabilities = ["EnableTable", "EnableServerless"]
+
+      table_role_assignments = {
+        app = {
+          principal_id         = "<object id of the app's managed identity>"
+          role_definition_name = "Cosmos DB Built-in Data Contributor"
+        }
+      }
+    }
+  }
 }
 ```
 
 ## Examples
 
-- [`examples/minimal`](./examples/minimal) - the smallest valid call (required inputs only).
-- [`examples/complete`](./examples/complete) - every supported input exercised.
+- [`examples/minimal`](./examples/minimal) - a serverless API for Table account with the secure defaults.
+- [`examples/complete`](./examples/complete) - a Table account with network rules, an identity and custom and built-in data roles, and a two region NoSQL account with 30 day continuous backup, with Cosmos DB Operator chained through the role-assignment module.
 
 ## Developing
 
@@ -87,14 +119,16 @@ The Requirements, Providers, Inputs, Outputs, and Resources below are generated 
 ## Requirements
 
 | Name | Version |
-|------|---------|
-| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.9.0, < 2.0.0 |
+| ---- | ------- |
+| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.11.0, < 2.0.0 |
+| <a name="requirement_azapi"></a> [azapi](#requirement\_azapi) | >= 2.13.0, < 3.0.0 |
 | <a name="requirement_azurerm"></a> [azurerm](#requirement\_azurerm) | >= 4.0.0, < 5.0.0 |
 
 ## Providers
 
 | Name | Version |
-|------|---------|
+| ---- | ------- |
+| <a name="provider_azapi"></a> [azapi](#provider\_azapi) | >= 2.13.0, < 3.0.0 |
 | <a name="provider_azurerm"></a> [azurerm](#provider\_azurerm) | >= 4.0.0, < 5.0.0 |
 
 ## Modules
@@ -104,20 +138,38 @@ No modules.
 ## Resources
 
 | Name | Type |
-|------|------|
-| [azurerm_resource_group.this](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/resource_group) | resource |
+| ---- | ---- |
+| [azapi_resource.table_role_assignment](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) | resource |
+| [azapi_resource.table_role_definition](https://registry.terraform.io/providers/Azure/azapi/latest/docs/resources/resource) | resource |
+| [azurerm_cosmosdb_account.this](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/cosmosdb_account) | resource |
+| [azurerm_cosmosdb_sql_role_assignment.this](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/cosmosdb_sql_role_assignment) | resource |
+| [azurerm_cosmosdb_sql_role_definition.this](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/cosmosdb_sql_role_definition) | resource |
 
 ## Inputs
 
 | Name | Description | Type | Default | Required |
-|------|-------------|------|---------|:--------:|
-| <a name="input_resource_groups"></a> [resource\_groups](#input\_resource\_groups) | List of resource groups to create. | <pre>list(object({<br/>    name     = string<br/>    location = string<br/>    tags     = optional(map(string), {})<br/>  }))</pre> | `[]` | no |
+| ---- | ----------- | ---- | ------- | :------: |
+| <a name="input_cosmosdb_accounts"></a> [cosmosdb\_accounts](#input\_cosmosdb\_accounts) | Cosmos DB accounts to create, keyed by account name (3 to 44 lowercase letters, digits and<br/>hyphens). The full azurerm\_cosmosdb\_account surface, plus the account's own data plane roles:<br/>those are child resources of the account, and azurerm\_role\_assignment cannot make them.<br/><br/>The API comes from kind and capabilities: GlobalDocumentDB on its own is NoSQL; add EnableTable<br/>for Table, or use MongoDB, EnableGremlin or EnableCassandra. EnableServerless gives serverless<br/>capacity (one region only, no throughput limit).<br/><br/>Secure by default: key based (local) authentication off, so Entra ID is the only way in to the<br/>data; account key metadata writes off; TLS 1.2; public network access off; continuous backup<br/>on the 7 day tier (no backup storage charge); free tier off. Ordinary Azure RBAC (Cosmos DB<br/>Operator, say) composes through the role-assignment module, private endpoints through the<br/>private-endpoint module and logs through the diagnostic-settings module.<br/><br/>Data plane roles, keyed by a name you choose:<br/>  table\_role\_definitions  custom roles for a Table account: data\_actions, not\_data\_actions and<br/>                          assignable\_scope\_paths (below the account; [""] is the account)<br/>  table\_role\_assignments  principal\_id holds a built-in role (role\_definition\_name: Cosmos DB<br/>                          Built-in Data Reader or Contributor) or one of the account's custom<br/>                          roles (role\_definition\_key), at scope\_path below the account<br/>  sql\_role\_definitions / sql\_role\_assignments   the same for a NoSQL account<br/>Table roles are made through azapi (azurerm has no resource for them). | <pre>map(object({<br/>    kind         = optional(string, "GlobalDocumentDB")<br/>    offer_type   = optional(string, "Standard")<br/>    capabilities = optional(set(string), [])<br/><br/>    consistency_policy = optional(object({<br/>      consistency_level       = optional(string, "Session")<br/>      max_interval_in_seconds = optional(number)<br/>      max_staleness_prefix    = optional(number)<br/>    }), {})<br/><br/>    # Defaults to one region, the module's location. The first is the write region.<br/>    geo_locations = optional(list(object({<br/>      location          = optional(string)<br/>      failover_priority = optional(number, 0)<br/>      zone_redundant    = optional(bool, false)<br/>    })), [{}])<br/><br/>    backup = optional(object({<br/>      type                = optional(string, "Continuous")<br/>      tier                = optional(string, "Continuous7Days")<br/>      interval_in_minutes = optional(number)<br/>      retention_in_hours  = optional(number)<br/>      storage_redundancy  = optional(string)<br/>    }), {})<br/><br/>    local_authentication_enabled       = optional(bool, false)<br/>    access_key_metadata_writes_enabled = optional(bool, false)<br/>    minimal_tls_version                = optional(string, "Tls12")<br/><br/>    public_network_access_enabled     = optional(bool, false)<br/>    ip_range_filter                   = optional(set(string), [])<br/>    is_virtual_network_filter_enabled = optional(bool, false)<br/>    virtual_network_rules = optional(list(object({<br/>      id                                   = string<br/>      ignore_missing_vnet_service_endpoint = optional(bool, false)<br/>    })), [])<br/>    network_acl_bypass_for_azure_services = optional(bool, false)<br/>    network_acl_bypass_ids                = optional(list(string), [])<br/><br/>    automatic_failover_enabled       = optional(bool)<br/>    multiple_write_locations_enabled = optional(bool, false)<br/>    free_tier_enabled                = optional(bool, false)<br/>    analytical_storage_enabled       = optional(bool, false)<br/>    analytical_storage_schema_type   = optional(string)<br/>    burst_capacity_enabled           = optional(bool)<br/>    partition_merge_enabled          = optional(bool)<br/>    mongo_server_version             = optional(string)<br/>    total_throughput_limit           = optional(number)<br/><br/>    identity = optional(object({<br/>      type         = string<br/>      identity_ids = optional(set(string))<br/>    }))<br/>    default_identity_type = optional(string)<br/>    key_vault_key_id      = optional(string)<br/><br/>    cors_rule = optional(object({<br/>      allowed_headers    = list(string)<br/>      allowed_methods    = list(string)<br/>      allowed_origins    = list(string)<br/>      exposed_headers    = list(string)<br/>      max_age_in_seconds = optional(number)<br/>    }))<br/><br/>    # Point in time restore into this new account (create_mode = "Restore").<br/>    create_mode = optional(string)<br/>    restore = optional(object({<br/>      source_cosmosdb_account_id = string<br/>      restore_timestamp_in_utc   = string<br/>      tables_to_restore          = optional(list(string))<br/>      databases = optional(list(object({<br/>        name             = string<br/>        collection_names = optional(set(string))<br/>      })), [])<br/>      gremlin_databases = optional(list(object({<br/>        name        = string<br/>        graph_names = optional(list(string))<br/>      })), [])<br/>    }))<br/><br/>    table_role_definitions = optional(map(object({<br/>      role_name              = optional(string)<br/>      data_actions           = list(string)<br/>      not_data_actions       = optional(list(string), [])<br/>      assignable_scope_paths = optional(list(string), [""])<br/>    })), {})<br/>    table_role_assignments = optional(map(object({<br/>      principal_id         = string<br/>      role_definition_name = optional(string)<br/>      role_definition_key  = optional(string)<br/>      scope_path           = optional(string, "")<br/>    })), {})<br/>    sql_role_definitions = optional(map(object({<br/>      role_name              = optional(string)<br/>      data_actions           = list(string)<br/>      assignable_scope_paths = optional(list(string), [""])<br/>    })), {})<br/>    sql_role_assignments = optional(map(object({<br/>      principal_id         = string<br/>      role_definition_name = optional(string)<br/>      role_definition_key  = optional(string)<br/>      scope_path           = optional(string, "")<br/>    })), {})<br/>  }))</pre> | `{}` | no |
+| <a name="input_location"></a> [location](#input\_location) | Azure region for the accounts, and their write region unless geo\_locations says otherwise. | `string` | n/a | yes |
+| <a name="input_resource_group_id"></a> [resource\_group\_id](#input\_resource\_group\_id) | Resource id of the resource group to create the accounts in. The name and subscription are parsed from it (pass the rg module's ids output). | `string` | n/a | yes |
+| <a name="input_tags"></a> [tags](#input\_tags) | Tags for every account. | `map(string)` | `{}` | no |
 
 ## Outputs
 
 | Name | Description |
-|------|-------------|
-| <a name="output_ids"></a> [ids](#output\_ids) | Map of resource group name to its id. |
-| <a name="output_names"></a> [names](#output\_names) | Map of resource group name to its name. |
-| <a name="output_tags"></a> [tags](#output\_tags) | Map of resource group name to its tags. |
+| ---- | ----------- |
+| <a name="output_cosmosdb_accounts"></a> [cosmosdb\_accounts](#output\_cosmosdb\_accounts) | Map of account name to its key attributes: id, name, kind, endpoint, the Table endpoint (for Table accounts, else null), read and write endpoints, and the identity's principal id. |
+| <a name="output_endpoints"></a> [endpoints](#output\_endpoints) | Map of account name to its endpoint (the document endpoint, https://<name>.documents.azure.com:443/). |
+| <a name="output_identity_principal_ids"></a> [identity\_principal\_ids](#output\_identity\_principal\_ids) | Map of account name to its identity principal id (only accounts with an identity). |
+| <a name="output_ids"></a> [ids](#output\_ids) | Map of account name to its resource id. |
+| <a name="output_ids_zipmap"></a> [ids\_zipmap](#output\_ids\_zipmap) | Map of account name to a { name, id } object, for passing where both are needed together. |
+| <a name="output_names"></a> [names](#output\_names) | The account names. |
+| <a name="output_resource_group_name"></a> [resource\_group\_name](#output\_resource\_group\_name) | Resource group name parsed from resource\_group\_id. |
+| <a name="output_sql_role_assignment_ids"></a> [sql\_role\_assignment\_ids](#output\_sql\_role\_assignment\_ids) | Map of "<account>\|<key>" to the NoSQL data plane role assignment id. |
+| <a name="output_sql_role_definition_ids"></a> [sql\_role\_definition\_ids](#output\_sql\_role\_definition\_ids) | Map of "<account>\|<key>" to the NoSQL custom data plane role definition id. |
+| <a name="output_subscription_id"></a> [subscription\_id](#output\_subscription\_id) | Subscription id parsed from resource\_group\_id. |
+| <a name="output_table_endpoints"></a> [table\_endpoints](#output\_table\_endpoints) | Map of account name to its Table API endpoint (https://<name>.table.cosmos.azure.com:443/), for API for Table accounts only. azure-data-tables uses Entra ID against it with no other change. |
+| <a name="output_table_role_assignment_ids"></a> [table\_role\_assignment\_ids](#output\_table\_role\_assignment\_ids) | Map of "<account>\|<key>" to the Table data plane role assignment id. |
+| <a name="output_table_role_definition_ids"></a> [table\_role\_definition\_ids](#output\_table\_role\_definition\_ids) | Map of "<account>\|<key>" to the Table custom data plane role definition id. |
+| <a name="output_tags"></a> [tags](#output\_tags) | The tags applied to the accounts. |
 <!-- END_TF_DOCS -->

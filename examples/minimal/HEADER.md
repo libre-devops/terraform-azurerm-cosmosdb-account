@@ -14,8 +14,9 @@
 
 # Minimal example
 
-The smallest valid call to this module: required inputs only. The environment comes from the
-Terraform workspace (`terraform.workspace`), not a variable. Run it with `just e2e minimal`, which
-applies the stack then always destroys it.
+A serverless API for Table account with the module's secure defaults: Entra ID only data
+access, TLS 1.2, no public network access and continuous backup on the free 7 day tier. The
+environment comes from the Terraform workspace (`terraform.workspace`), not a variable. Run it with
+`just e2e minimal`, which applies the stack then always destroys it.
 
 [![Terraform Registry](https://img.shields.io/badge/registry-libre--devops-7B42BC?logo=terraform&logoColor=white)](https://registry.terraform.io/namespaces/libre-devops)

@@ -1,10 +1,4 @@
 <!--
-  This is the template for every Libre DevOps Terraform module. When you create a module from it:
-    - replace the title, tagline, and the CI workflow / repo name in the badge URLs
-    - replace the resources in main.tf, and the variables, outputs, and examples to match
-    - run `just docs` (or Sort-LdoTerraform.ps1) to regenerate the section between the markers
--->
-<!--
   Keep the title and badges OUTSIDE the centered <div>: the Terraform Registry's markdown renderer
   does not parse markdown inside an HTML block, so a # heading or [![badge]] in the div renders as
   literal text on the registry. Only the logo (HTML) goes in the div.
@@ -18,33 +12,71 @@
   </a>
 </div>
 
-# Terraform Module Template
+# Terraform Azure Cosmos DB Account
 
-A starting point for Libre DevOps Terraform modules: the standard file layout, examples, tests, and tooling.
+Cosmos DB accounts (API for Table or NoSQL, full surface) with Entra ID only data access, their data plane roles, and continuous backup.
 
-[![CI](https://github.com/libre-devops/terraform-module-template/actions/workflows/ci.yml/badge.svg)](https://github.com/libre-devops/terraform-module-template/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/libre-devops/terraform-module-template?sort=semver&label=release)](https://github.com/libre-devops/terraform-module-template/releases/latest)
+[![CI](https://github.com/libre-devops/terraform-azurerm-cosmosdb-account/actions/workflows/ci.yml/badge.svg)](https://github.com/libre-devops/terraform-azurerm-cosmosdb-account/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/libre-devops/terraform-azurerm-cosmosdb-account?sort=semver&label=release)](https://github.com/libre-devops/terraform-azurerm-cosmosdb-account/releases/latest)
 [![Terraform Registry](https://img.shields.io/badge/registry-libre--devops-7B42BC?logo=terraform&logoColor=white)](https://registry.terraform.io/namespaces/libre-devops)
-[![License](https://img.shields.io/github/license/libre-devops/terraform-module-template)](./LICENSE)
+[![License](https://img.shields.io/github/license/libre-devops/terraform-azurerm-cosmosdb-account)](./LICENSE)
 
 ---
+
+## Overview
+
+Cosmos DB accounts keyed by name, covering the full `azurerm_cosmosdb_account` surface (API and
+capacity by `kind` and `capabilities`, consistency, regions, backup, network rules, identity and
+customer managed keys, analytical store, CORS, and point in time restore into a new account).
+Secure by default: **key based (local) authentication off**, so Entra ID is the only way to the
+data and every access names its principal; account key metadata writes off; **TLS 1.2**; **public
+network access off**; **continuous backup on the 7 day tier**, which has no backup storage charge;
+free tier off. The resource group is passed by id.
+
+The accounts' **data plane roles** live here too, because they are child resources of the account
+that `azurerm_role_assignment` cannot make: `table_role_definitions` and `table_role_assignments`
+for API for Table accounts (through azapi, as azurerm has no resource for them), and
+`sql_role_definitions` and `sql_role_assignments` for NoSQL accounts. Assign the built-in **Cosmos
+DB Built-in Data Reader** or **Contributor** by name, or the account's own custom roles by key, at
+the account or a path below it.
+
+Everything else composes from other modules: tables through the `cosmosdb-table` module, private
+endpoints through `private-endpoint`, logs through `diagnostic-settings`, and ordinary Azure RBAC
+(for example Cosmos DB Operator) through `role-assignment`, as the complete example shows.
+
+> A Table account's endpoint is `https://<name>.table.cosmos.azure.com:443/` (output
+> `table_endpoints`). `azure-data-tables` and the other Azure Tables SDKs use Entra ID against it
+> unchanged: they ask for a `https://cosmos.azure.com/.default` token for that host by themselves.
 
 ## Usage
 
 ```hcl
-module "this" {
-  source = "libre-devops/<module>/azurerm"
+module "cosmosdb" {
+  source  = "libre-devops/cosmosdb-account/azurerm"
+  version = "~> 1.0"
 
-  name     = "rg-ldo-uks-dev-01"
-  location = "uksouth"
-  tags     = { environment = "dev" }
+  resource_group_id = module.rg.ids["rg-ldo-uks-dev-001"]
+  location          = "uksouth"
+
+  cosmosdb_accounts = {
+    "cosmos-ldo-uks-dev-001" = {
+      capabilities = ["EnableTable", "EnableServerless"]
+
+      table_role_assignments = {
+        app = {
+          principal_id         = "<object id of the app's managed identity>"
+          role_definition_name = "Cosmos DB Built-in Data Contributor"
+        }
+      }
+    }
+  }
 }
 ```
 
 ## Examples
 
-- [`examples/minimal`](./examples/minimal) - the smallest valid call (required inputs only).
-- [`examples/complete`](./examples/complete) - every supported input exercised.
+- [`examples/minimal`](./examples/minimal) - a serverless API for Table account with the secure defaults.
+- [`examples/complete`](./examples/complete) - a Table account with network rules, an identity and custom and built-in data roles, and a two region NoSQL account with 30 day continuous backup, with Cosmos DB Operator chained through the role-assignment module.
 
 ## Developing
 

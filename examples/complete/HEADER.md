@@ -14,8 +14,11 @@
 
 # Complete example
 
-Exercises the fuller surface of this module. The environment comes from the Terraform workspace
-(`terraform.workspace`), not a variable. Run it with `just e2e complete`, which applies the stack
-then always destroys it.
+A serverless API for Table account (one allowed address range, a system assigned identity, a
+custom read only data role, and the deployer holding the built-in contributor role) and a two
+region NoSQL account (continuous backup on the 30 day tier, automatic failover, the deployer
+holding the built-in reader role on one database), with Cosmos DB Operator chained through the
+role-assignment module. The environment comes from the Terraform workspace, not a variable. Run it
+with `just e2e complete`, which applies the stack then always destroys it.
 
 [![Terraform Registry](https://img.shields.io/badge/registry-libre--devops-7B42BC?logo=terraform&logoColor=white)](https://registry.terraform.io/namespaces/libre-devops)
