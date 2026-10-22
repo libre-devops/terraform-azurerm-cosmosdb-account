@@ -14,9 +14,10 @@
 
 # Minimal example
 
-The smallest valid call to this module: required inputs only. The environment comes from the
-Terraform workspace (`terraform.workspace`), not a variable. Run it with `just e2e minimal`, which
-applies the stack then always destroys it.
+A serverless API for Table account with the module's secure defaults: Entra ID only data
+access, TLS 1.2, no public network access and continuous backup on the free 7 day tier. The
+environment comes from the Terraform workspace (`terraform.workspace`), not a variable. Run it with
+`just e2e minimal`, which applies the stack then always destroys it.
 
 [![Terraform Registry](https://img.shields.io/badge/registry-libre--devops-7B42BC?logo=terraform&logoColor=white)](https://registry.terraform.io/namespaces/libre-devops)
 
@@ -25,28 +26,51 @@ applies the stack then always destroys it.
 
 ```hcl
 locals {
-  location = lookup(var.regions, var.loc, "uksouth")
+  location     = lookup(var.regions, var.loc, "uksouth")
+  rg_name      = "rg-${var.short}-${var.loc}-${terraform.workspace}-001"
+  account_name = "cosmos-${var.short}-${var.loc}-${terraform.workspace}-001"
 }
 
-# Minimal call: one resource group, required inputs only. The environment comes from the
-# Terraform workspace (terraform.workspace), not a variable.
-module "this" {
+module "tags" {
+  source  = "libre-devops/tags/azurerm"
+  version = "~> 4.0"
+
+  cost_centre     = "1888/67"
+  owner           = "platform@example.com"
+  deployed_branch = var.deployed_branch
+  deployed_repo   = var.deployed_repo
+}
+
+module "rg" {
+  source  = "libre-devops/rg/azurerm"
+  version = "~> 4.0"
+
+  resource_groups = [{ name = local.rg_name, location = local.location, tags = module.tags.tags }]
+}
+
+# Minimal call: a serverless API for Table account with the secure defaults (Entra ID only data
+# access, TLS 1.2, no public network access, continuous backup on the free 7 day tier).
+module "cosmosdb" {
   source = "../../"
 
-  resource_groups = [
-    {
-      name     = "rg-${var.short}-${var.loc}-${terraform.workspace}-tmpl-min"
-      location = local.location
-    },
-  ]
+  resource_group_id = module.rg.ids[local.rg_name]
+  location          = local.location
+  tags              = module.tags.tags
+
+  cosmosdb_accounts = {
+    (local.account_name) = {
+      capabilities = ["EnableTable", "EnableServerless"]
+    }
+  }
 }
 ```
 
 ## Requirements
 
 | Name | Version |
-|------|---------|
-| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.9.0, < 2.0.0 |
+| ---- | ------- |
+| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.11.0, < 2.0.0 |
+| <a name="requirement_azapi"></a> [azapi](#requirement\_azapi) | >= 2.13.0, < 3.0.0 |
 | <a name="requirement_azurerm"></a> [azurerm](#requirement\_azurerm) | >= 4.0.0, < 5.0.0 |
 
 ## Providers
@@ -56,8 +80,10 @@ No providers.
 ## Modules
 
 | Name | Source | Version |
-|------|--------|---------|
-| <a name="module_this"></a> [this](#module\_this) | ../../ | n/a |
+| ---- | ------ | ------- |
+| <a name="module_cosmosdb"></a> [cosmosdb](#module\_cosmosdb) | ../../ | n/a |
+| <a name="module_rg"></a> [rg](#module\_rg) | libre-devops/rg/azurerm | ~> 4.0 |
+| <a name="module_tags"></a> [tags](#module\_tags) | libre-devops/tags/azurerm | ~> 4.0 |
 
 ## Resources
 
@@ -66,7 +92,9 @@ No resources.
 ## Inputs
 
 | Name | Description | Type | Default | Required |
-|------|-------------|------|---------|:--------:|
+| ---- | ----------- | ---- | ------- | :------: |
+| <a name="input_deployed_branch"></a> [deployed\_branch](#input\_deployed\_branch) | Git branch the deployment came from. Auto-filled in CI from TF\_VAR\_deployed\_branch. | `string` | `""` | no |
+| <a name="input_deployed_repo"></a> [deployed\_repo](#input\_deployed\_repo) | Repository URL the deployment came from. Auto-filled in CI from TF\_VAR\_deployed\_repo. | `string` | `""` | no |
 | <a name="input_loc"></a> [loc](#input\_loc) | Outfix: short Azure region code used in resource names (for example uks). | `string` | `"uks"` | no |
 | <a name="input_regions"></a> [regions](#input\_regions) | Map of short region codes to Azure region slugs. | `map(string)` | <pre>{<br/>  "eus": "eastus",<br/>  "euw": "westeurope",<br/>  "uks": "uksouth",<br/>  "ukw": "ukwest"<br/>}</pre> | no |
 | <a name="input_short"></a> [short](#input\_short) | Infix: short product code used in resource names. | `string` | `"ldo"` | no |
@@ -74,7 +102,7 @@ No resources.
 ## Outputs
 
 | Name | Description |
-|------|-------------|
-| <a name="output_ids"></a> [ids](#output\_ids) | Map of resource group name to id. |
-| <a name="output_names"></a> [names](#output\_names) | Map of resource group name to name. |
+| ---- | ----------- |
+| <a name="output_ids"></a> [ids](#output\_ids) | Map of account name to id. |
+| <a name="output_table_endpoints"></a> [table\_endpoints](#output\_table\_endpoints) | Map of account name to its Table endpoint. |
 <!-- END_TF_DOCS -->

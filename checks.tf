@@ -1,25 +1,23 @@
-# check blocks run after every plan and apply and emit a warning (without blocking) when an
-# invariant is violated. They are the place to enforce module-wide consistency. Keep at least one
-# meaningful check in every module and extend it as the module grows.
+# check blocks run after every plan and apply and warn (without blocking) when an invariant is
+# violated.
 
-# Catches the classic list(object) -> map for_each pitfall: two entries sharing a name silently
-# collapse into one, so fewer resources are created than were requested.
-check "no_duplicate_resource_group_names" {
+# Key based access bypasses Entra ID and leaves no identity in the logs: flag any account that
+# turns it back on.
+check "entra_only_data_access" {
   assert {
-    condition     = length(azurerm_resource_group.this) == length(var.resource_groups)
-    error_message = "resource_groups contains duplicate names; each name must be unique (the for_each map collapses duplicates)."
+    condition     = alltrue([for a in values(var.cosmosdb_accounts) : !a.local_authentication_enabled])
+    error_message = "An account has local_authentication_enabled = true: account keys can reach its data without Entra ID."
   }
 }
 
-# Example: enforce the Libre DevOps naming convention on created resources. Uncomment and adapt
-# the regex per module.
-#
-# check "resource_group_naming" {
-#   assert {
-#     condition = alltrue([
-#       for rg in azurerm_resource_group.this :
-#       can(regex("^rg-[a-z0-9]{2,4}-[a-z]{2,3}-[a-z0-9]+", rg.name))
-#     ])
-#     error_message = "Resource group names should follow rg-<infix>-<region>-<workspace>... ."
-#   }
-# }
+# Public network access with no IP range or virtual network rule admits every address (Entra ID is
+# still required for data, but the endpoint is open).
+check "public_access_is_narrowed" {
+  assert {
+    condition = alltrue([
+      for a in values(var.cosmosdb_accounts) :
+      !a.public_network_access_enabled || length(a.ip_range_filter) > 0 || length(a.virtual_network_rules) > 0
+    ])
+    error_message = "An account has public network access with no ip_range_filter or virtual_network_rules: any address can reach its endpoint."
+  }
+}
