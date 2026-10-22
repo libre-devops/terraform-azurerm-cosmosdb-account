@@ -2,6 +2,16 @@
 
 All notable changes to this module are recorded here.
 
+## 1.0.1
+
+### Fixed
+- Table role definitions no longer send `notDataActions`: Azure Cosmos DB for Table's role based
+  access control does not support it, and denies anything not listed in `dataActions` (Microsoft
+  Learn, data plane security reference for Table). The `not_data_actions` attribute is removed
+  from `table_role_definitions`; it could only ever be empty.
+- The complete example's custom Table role includes `readMetadata`, which every SDK client needs,
+  and `executeQuery`.
+
 ## 1.0.0
 
 ### Added

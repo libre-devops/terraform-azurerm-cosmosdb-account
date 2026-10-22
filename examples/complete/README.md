@@ -77,9 +77,14 @@ module "cosmosdb" {
       identity                      = { type = "SystemAssigned" }
 
       table_role_definitions = {
+        # readMetadata is needed by every SDK client; executeQuery lets it list as well as read.
         entity_reader = {
-          role_name    = "Table entity reader"
-          data_actions = ["Microsoft.DocumentDB/databaseAccounts/tables/containers/entities/read"]
+          role_name = "Table entity reader"
+          data_actions = [
+            "Microsoft.DocumentDB/databaseAccounts/readMetadata",
+            "Microsoft.DocumentDB/databaseAccounts/tables/containers/executeQuery",
+            "Microsoft.DocumentDB/databaseAccounts/tables/containers/entities/read",
+          ]
         }
       }
 
