@@ -154,12 +154,16 @@ resource "azapi_resource" "table_role_definition" {
   }
 }
 
+# Cosmos DB refuses to change an assignment's scope or principal in place ("Updating Table Role
+# Assignment Scope is not permitted. You may only update the associated Role Definition."), so
+# either change replaces it; a new role definition is still updated in place.
 resource "azapi_resource" "table_role_assignment" {
   for_each = local.table_role_assignments
 
-  type      = "Microsoft.DocumentDB/databaseAccounts/tableRoleAssignments@2026-03-15"
-  name      = each.value.id
-  parent_id = azurerm_cosmosdb_account.this[each.value.account].id
+  type                  = "Microsoft.DocumentDB/databaseAccounts/tableRoleAssignments@2026-03-15"
+  name                  = each.value.id
+  parent_id             = azurerm_cosmosdb_account.this[each.value.account].id
+  replace_triggers_refs = ["properties.principalId", "properties.scope"]
 
   body = {
     properties = {

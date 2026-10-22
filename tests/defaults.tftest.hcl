@@ -131,6 +131,11 @@ run "a_serverless_table_account_with_built_in_and_custom_roles" {
   }
 
   assert {
+    condition     = jsonencode(azapi_resource.table_role_assignment["cosmos-ldo-uks-tst-01|auditor"].replace_triggers_refs) == jsonencode(["properties.principalId", "properties.scope"])
+    error_message = "A Table role assignment is replaced, not updated, when its principal or scope changes: Cosmos DB refuses either in place."
+  }
+
+  assert {
     condition     = jsonencode(keys(one(azapi_resource.table_role_definition["cosmos-ldo-uks-tst-01|reader"].body.properties.permissions))) == jsonencode(["dataActions"])
     error_message = "A Table role definition carries dataActions only: the service does not support notDataActions for Table roles."
   }

@@ -2,6 +2,14 @@
 
 All notable changes to this module are recorded here.
 
+## 1.0.2
+
+### Fixed
+- A Table role assignment whose scope or principal changes is replaced rather than updated:
+  Cosmos DB refuses either in place ("Updating Table Role Assignment Scope is not permitted. You
+  may only update the associated Role Definition."). A change of role definition is still an
+  update. Assignments that do not change are left alone.
+
 ## 1.0.1
 
 ### Fixed
