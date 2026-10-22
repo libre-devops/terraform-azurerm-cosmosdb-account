@@ -15,7 +15,8 @@ variable "cosmosdb_accounts" {
     private-endpoint module and logs through the diagnostic-settings module.
 
     Data plane roles, keyed by a name you choose:
-      table_role_definitions  custom roles for a Table account: data_actions, not_data_actions and
+      table_role_definitions  custom roles for a Table account: data_actions (the service has no
+                              notDataActions for Table roles: anything not listed is denied) and
                               assignable_scope_paths (below the account; [""] is the account)
       table_role_assignments  principal_id holds a built-in role (role_definition_name: Cosmos DB
                               Built-in Data Reader or Contributor) or one of the account's custom
@@ -107,7 +108,6 @@ variable "cosmosdb_accounts" {
     table_role_definitions = optional(map(object({
       role_name              = optional(string)
       data_actions           = list(string)
-      not_data_actions       = optional(list(string), [])
       assignable_scope_paths = optional(list(string), [""])
     })), {})
     table_role_assignments = optional(map(object({

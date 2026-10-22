@@ -147,8 +147,7 @@ resource "azapi_resource" "table_role_definition" {
       assignableScopes = [for path in each.value.assignable_scope_paths : "${azurerm_cosmosdb_account.this[each.value.account].id}${path}"]
       permissions = [
         {
-          dataActions    = each.value.data_actions
-          notDataActions = each.value.not_data_actions
+          dataActions = each.value.data_actions
         }
       ]
     }

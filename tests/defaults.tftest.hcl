@@ -131,6 +131,11 @@ run "a_serverless_table_account_with_built_in_and_custom_roles" {
   }
 
   assert {
+    condition     = jsonencode(keys(one(azapi_resource.table_role_definition["cosmos-ldo-uks-tst-01|reader"].body.properties.permissions))) == jsonencode(["dataActions"])
+    error_message = "A Table role definition carries dataActions only: the service does not support notDataActions for Table roles."
+  }
+
+  assert {
     condition = (
       can(regex("^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$", azapi_resource.table_role_assignment["cosmos-ldo-uks-tst-01|app"].name)) &&
       azapi_resource.table_role_assignment["cosmos-ldo-uks-tst-01|app"].name != azapi_resource.table_role_assignment["cosmos-ldo-uks-tst-01|auditor"].name
